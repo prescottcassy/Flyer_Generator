@@ -1,0 +1,14 @@
+subprocess
+sys
+einops
+tensorboard
+torchvision
+numpy
+torch
+Pillow
+matplotlib
+pytesseract
+
+importlib-metadata
+pathlib
+typing
