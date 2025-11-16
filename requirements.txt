@@ -12,6 +12,3 @@ python-dotenv
 diffusers
 transformers
 
-# PyTorch - install via command line to select CUDA version
-# (CPU-only):
-#  python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision

@@ -1,0 +1,28 @@
+name: Run training (manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-training:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies (quick)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision || true
+          python -m pip install -r requirements.txt
+
+      - name: Run training script with HF_TOKEN
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python model/training_pipeline.py --gen-enabled
