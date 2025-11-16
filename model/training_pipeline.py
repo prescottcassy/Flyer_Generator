@@ -1,8 +1,8 @@
-# Custom imports for environment setup, datasets, diffusion utils, and model
-# To run, enter this in the terminal:
-# 'function RunTraining { & "$PSScriptRoot\venv\Scripts\python.exe" "$PSScriptRoot\model\training_pipeline.py" @args }'
-# or 'cd /path/to/BrandBeast./venv/bin/python ./model/training_pipeline.py --gen-enabled' in bash terminal
-from setup_env import set_random_seed, device, SEED
+from setup_env import (
+    set_random_seed, 
+    device, 
+    SEED
+)
 set_random_seed(SEED)
 from datasets import (
     make_datasets_and_loaders, 
@@ -13,7 +13,7 @@ from datasets import (
 
 import torch, torch.nn as nn, sys, os, matplotlib.pyplot as plt
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))) 
-from dotenv import load_dotenv
+
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from huggingface_hub import InferenceClient
 from torch.optim import Adam
@@ -27,6 +27,7 @@ from utils import (
     enable_cpu_offload,
     generate_image,
     save_image,
+    open_image_devcontainer,
     benchmark_metrics,
     log_pipeline_run,
 )
@@ -37,8 +38,6 @@ from sdxl_diffusion import (
 )
 
 from model.NueralNetwork import SDXL
-
-load_dotenv("model/secrets.env")
 
 # Ensure HF_TOKEN is loaded and provide a fallback error message
 api_key = os.getenv('HF_TOKEN')
@@ -204,14 +203,15 @@ if __name__ == '__main__':
             save_image(generated_image, "generated_image.png")
             print("Image saved at: generated_image.png")  # Log the save path
 
-            # Display the saved image using os.startfile as a fallback
+            # Display the saved image
             try:
                 import os
                 from PIL import Image
 
                 img = Image.open("generated_image.png")
-                img.save("generated_image_temp.png")
-                os.startfile("generated_image_temp.png")
+                temp_path = "generated_image_temp.png"
+                img.save(temp_path)
+                open_image_devcontainer(temp_path)
             except Exception as e:
                 print(f"Error displaying the image: {e}")
         

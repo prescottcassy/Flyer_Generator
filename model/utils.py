@@ -1,5 +1,13 @@
 import torch
 from setup_env import device, IMG_SIZE, IMG_CH
+import platform
+import subprocess
+import shutil
+import webbrowser
+import threading
+import http.server as _http_server
+import socketserver
+import os
 
 # Helper functions
 def validate_model_parameters(model):
@@ -44,6 +52,49 @@ def save_image(image, path):
         image.save(path)
     except Exception:
         pass
+
+def _serve_file_via_http(path: str, port: int = 8000):
+    dirpath = os.path.dirname(os.path.abspath(path)) or "."
+    prev_cwd = os.getcwd()
+    try:
+        os.chdir(dirpath)
+        handler = _http_server.SimpleHTTPRequestHandler
+        httpd = socketserver.TCPServer(("0.0.0.0", port), handler)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        return httpd, thread, f"http://127.0.0.1:{port}/{os.path.basename(path)}"
+    finally:
+        os.chdir(prev_cwd)
+
+def open_image_devcontainer(path: str, port: int = 8000):
+    """
+    Cross-platform / devcontainer-friendly image opener.
+    Order:
+    1) xdg-open (typical Linux desktop)
+    2) webbrowser.open(file://...)
+    3) serve via tiny HTTP server and print URL (use VS Code port forwarding)
+    """
+    try:
+        opener = shutil.which("xdg-open")
+        if opener:
+            subprocess.run([opener, path], check=False)
+            return
+    except Exception:
+        pass
+
+    try:
+        webbrowser.open(f"file://{os.path.abspath(path)}")
+        return
+    except Exception:
+        pass
+
+    try:
+        httpd, thread, url = _serve_file_via_http(path, port=port)
+        print(f"Started local HTTP server to serve file at: {url}")
+        print(f"If this is a devcontainer, forward port {port} and open the URL in your host browser.")
+        return
+    except Exception as exc:
+        print(f"Could not open image automatically: {exc}. Image saved at: {path}")
 
 def benchmark_metrics(model, input_data, device):
     """
