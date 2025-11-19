@@ -39,10 +39,10 @@ from sdxl_diffusion import (
 
 from model.NueralNetwork import SDXL
 
-# Ensure HF_TOKEN is loaded and provide a fallback error message
-api_key = os.getenv('HF_TOKEN')
+# Ensure SERVICEACCOUNT is loaded and provide a fallback error message
+api_key = os.getenv('SERVICEACCOUNT')
 if not api_key:
-    raise RuntimeError("HF_TOKEN is not set. Please check your secrets.env file.")
+    raise RuntimeError("SERVICEACCOUNT is not set. Please check your secrets.env file.")
 
 client = InferenceClient(
     provider="auto",
