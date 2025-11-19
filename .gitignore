@@ -2,6 +2,11 @@
 __pycache__/
 *.py[cod]
 *$py.class
+tmp/
+outputs/
+*.safetensoros
+*.pt
+*.ckpt
 
 # C extensions
 *.so
