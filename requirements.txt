@@ -5,7 +5,6 @@ numpy
 Pillow
 matplotlib
 pytesseract
-shellcheck
 tensorboard
 
 # Env and HF
