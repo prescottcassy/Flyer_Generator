@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run training script with SERVICEACCOUNT
+      - name: Run training script
         env:
           SERVICEACCOUNT: ${{ secrets.SERVICEACCOUNT}}
         run: |
@@ -24,8 +24,7 @@ jobs:
           echo "Using HF_HOME=$NEW_HF_HOME"
           export TRANSFORMERS_CACHE="${NEW_HF_HOME}/transformers"
           export HF_HOME="$NEW_HF_HOME"
-          # optional: show disk usage
-          df -h "$NEW_HF_HOME" || df -h
+          python -m pip install accelerate
           sudo apt-get update && sudo apt-get install -y shellcheck
           python -m pip install --upgrade pip
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision || true
