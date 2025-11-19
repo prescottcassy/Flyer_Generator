@@ -11,7 +11,7 @@ from datasets import (
     create_train_loader
 )
 
-import torch, torch.nn as nn, sys, os, matplotlib.pyplot as plt
+import torch, torch.nn as nn, sys, os, matplotlib.pyplot as plt, json
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))) 
 
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
