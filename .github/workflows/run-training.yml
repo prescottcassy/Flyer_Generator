@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run training script with HF_TOKEN
+      - name: Run training script with SERVICEACCOUNT
         env:
           HF_TOKEN: ${{ secrets.SERVICEACCOUNT}}
         run: |
