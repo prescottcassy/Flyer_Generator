@@ -5,10 +5,11 @@ numpy
 Pillow
 matplotlib
 pytesseract
+shellcheck
+tensorboard
 
 # Env and HF
 python-dotenv
 diffusers
-transformers
 transformers
 

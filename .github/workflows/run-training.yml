@@ -15,10 +15,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run training script with SERVICEACCOUNT
+      - name: Run training script
         env:
-          HF_TOKEN: ${{ secrets.SERVICEACCOUNT}}
+          SERVICEACCOUNT: ${{ secrets.SERVICEACCOUNT}}
         run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
           python -m pip install --upgrade pip
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision || true
           python -m pip install -r requirements.txt
