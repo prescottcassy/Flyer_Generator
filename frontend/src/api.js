@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_BASE_URL;
+const BASE = "https://zonal-cooperation-production.up.railway.app/";
 
 export async function health() {
   return fetch(`${BASE}/health`).then(r => r.json());
