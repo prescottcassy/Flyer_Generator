@@ -1,14 +1,16 @@
-# Core data and ML packages
-einops
-tensorboard
+# Core packages
+python-dotenv
 numpy
 Pillow
 matplotlib
-pytesseract
-tensorboard
 
-# Env and HF
-python-dotenv
+# ML packages
 diffusers
 transformers
+torch
+torchvision
+
+# API
+fastapi
+uvicorn
 
