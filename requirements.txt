@@ -3,7 +3,6 @@ python-dotenv
 numpy
 Pillow
 matplotlib
-accelerate
 
 # ML packages
 diffusers
@@ -15,5 +14,4 @@ tensorboard
 # API
 fastapi
 uvicorn
-
 
