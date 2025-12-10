@@ -9,9 +9,10 @@ diffusers
 transformers
 torch
 torchvision
+tensorboard
 
 # API
 fastapi
 uvicorn
-tensorboard
+
 
