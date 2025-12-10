@@ -5,7 +5,7 @@ from .setup_env import (
 )
 set_random_seed(SEED)
 
-import torch, torch.nn as nn, sys, os, matplotlib.pyplot as plt, json
+import torch, torch.nn as nn, sys, os, matplotlib.pyplot as plt, json, tensorboard
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))) 
 
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
