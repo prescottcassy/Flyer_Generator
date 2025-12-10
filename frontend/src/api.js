@@ -1,11 +1,11 @@
-const BASE = "https://zonal-cooperation-production.up.railway.app/";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 export async function health() {
-  return fetch(`${BASE}/health`).then(r => r.json());
+  return fetch(`${API_BASE}/health`).then(r => r.json());
 }
 
 export async function generate(prompt, num_steps = 50) {
-  const res = await fetch(`${BASE}/generate`, {
+  const res = await fetch(`${API_BASE}/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt, num_inference_steps: num_steps }),
@@ -32,9 +32,9 @@ export async function generate(prompt, num_steps = 50) {
 }
 
 export async function uploadImage(formData) {
-  return fetch(`${BASE}/upload`, { method: 'POST', body: formData }).then(r => r.json());
+  return fetch(`${API_BASE}/upload`, { method: 'POST', body: formData }).then(r => r.json());
 }
 
 export async function listImages() {
-  return fetch(`${BASE}/list`).then(r => r.json());
+  return fetch(`${API_BASE}/list`).then(r => r.json());
 }
