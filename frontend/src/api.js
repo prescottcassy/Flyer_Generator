@@ -1,5 +1,4 @@
-// Default to local backend during development if VITE_API_BASE_URL is not set
-const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const BASE = import.meta.env.VITE_API_BASE_URL;
 
 export async function health() {
   return fetch(`${BASE}/health`).then(r => r.json());
