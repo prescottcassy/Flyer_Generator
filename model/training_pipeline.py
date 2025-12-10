@@ -4,12 +4,6 @@ from .setup_env import (
     SEED,
 )
 set_random_seed(SEED)
-from .model_data_prep import (
-    make_datasets_and_loaders,
-    IMG_SIZE,
-    IMG_CH,
-    create_train_loader,
-)
 
 import torch, torch.nn as nn, sys, os, matplotlib.pyplot as plt, json
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))) 
@@ -30,6 +24,7 @@ from .utils import (
     open_image_devcontainer,
     benchmark_metrics,
     log_pipeline_run,
+    create_train_loader,
 )
 
 from .diffusion_process import (
@@ -42,6 +37,10 @@ from .model import SDXL
 # Define refiner_model_id globally
 base_model_id = "stabilityai/stable-diffusion-xl-base-1.0"
 refiner_model_id = "stabilityai/stable-diffusion-xl-refiner-1.0"
+
+# Image configuration
+IMG_SIZE = 512
+IMG_CH = 3
 
 # Initialize base and refiner pipelines separately
 base = None
