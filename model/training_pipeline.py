@@ -1,109 +1,52 @@
-import sys, os, json
+from .setup_env import (
+    set_random_seed,
+    device,
+    SEED,
+)
+set_random_seed(SEED)
 
+import torch, torch.nn as nn, sys, os, matplotlib.pyplot as plt, json
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))) 
 
-# These imports are only needed for training and are lazy-loaded below
-torch = None
-nn = None
-plt = None
-DiffusionPipeline = None
-InferenceClient = None
-Adam = None
-SummaryWriter = None
-GradScaler = None
-autocast = None
-Image = None
-set_random_seed = None
-device = None
-SEED = None
-validate_model_parameters = None
-enable_cpu_offload = None
-save_image = None
-open_image_devcontainer = None
-benchmark_metrics = None
-log_pipeline_run = None
-create_train_loader = None
-init_diffusion = None
-add_noise = None
-SDXL = None
+from diffusers.pipelines.pipeline_utils import DiffusionPipeline
+from huggingface_hub import InferenceClient
+from torch.optim import Adam
+from torch.utils.tensorboard import SummaryWriter
+from torch.amp.grad_scaler import GradScaler
+from torch.amp.autocast_mode import autocast
+from PIL import Image
 
-from .utils import generate_image
+from .utils import (
+    validate_model_parameters,
+    enable_cpu_offload,
+    generate_image,
+    save_image,
+    open_image_devcontainer,
+    benchmark_metrics,
+    log_pipeline_run,
+    create_train_loader
+)
 
-def _lazy_load_training_deps():
-    """Lazily load training-specific dependencies only when needed."""
-    global torch, nn, plt, DiffusionPipeline, InferenceClient, Adam, SummaryWriter
-    global GradScaler, autocast, Image, set_random_seed, device, SEED
-    global validate_model_parameters, enable_cpu_offload, save_image
-    global open_image_devcontainer, benchmark_metrics, log_pipeline_run, create_train_loader
-    global init_diffusion, add_noise, SDXL
-    
-    if torch is not None:
-        return  # Already loaded
-    
-    import torch as torch_
-    import torch.nn as nn_
-    import matplotlib.pyplot as plt_
-    from diffusers.pipelines.pipeline_utils import DiffusionPipeline as DP
-    from huggingface_hub import InferenceClient as IC
-    from torch.optim import Adam as Adam_
-    from torch.utils.tensorboard import SummaryWriter as SW
-    from torch.amp.grad_scaler import GradScaler as GS
-    from torch.amp.autocast_mode import autocast as autocast_
-    from PIL import Image as Image_
-    
-    from .setup_env import set_random_seed as srs, device as d, SEED as s
-    from .utils import (
-        validate_model_parameters as vmp,
-        enable_cpu_offload as eco,
-        save_image as si,
-        open_image_devcontainer as oid,
-        benchmark_metrics as bm,
-        log_pipeline_run as lpr,
-        create_train_loader as ctl,
-    )
-    from .diffusion_process import init_diffusion as id_, add_noise as an_
-    from .model import SDXL as SDXL_
-    
-    torch = torch_
-    nn = nn_
-    plt = plt_
-    DiffusionPipeline = DP
-    InferenceClient = IC
-    Adam = Adam_
-    SummaryWriter = SW
-    GradScaler = GS
-    autocast = autocast_
-    Image = Image_
-    set_random_seed = srs
-    device = d
-    SEED = s
-    validate_model_parameters = vmp
-    enable_cpu_offload = eco
-    save_image = si
-    open_image_devcontainer = oid
-    benchmark_metrics = bm
-    log_pipeline_run = lpr
-    create_train_loader = ctl
-    init_diffusion = id_
-    add_noise = an_
-    SDXL = SDXL_
-    
-    set_random_seed(SEED)
+from .diffusion_process import (
+    init_diffusion,
+    add_noise,
+)
+
+from .model import SDXL
+
+# Define constants for image processing
+IMG_SIZE = 512
+IMG_CH = 4
 
 # Define refiner_model_id globally
 base_model_id = "stabilityai/stable-diffusion-xl-base-1.0"
 refiner_model_id = "stabilityai/stable-diffusion-xl-refiner-1.0"
-
-# Image configuration
-IMG_SIZE = 512
-IMG_CH = 3
 
 # Initialize base and refiner pipelines separately
 base = None
 refiner = None
 
 def load_pipeline():
-    _lazy_load_training_deps()  # Load training dependencies on first call
     global base, refiner
     # Ensure SERVICEACCOUNT is loaded and provide a fallback error message
     api_key = os.getenv('SERVICEACCOUNT')
@@ -167,7 +110,9 @@ def load_pipeline():
 n_steps = 1000
 beta_start = 0.0001
 beta_end = 0.02
-init_diffusion(n_steps=n_steps, beta_start=beta_start, beta_end=beta_end, device_override=device)
+# Only run if this is the main script, not when imported by server
+if __name__ == '__main__':
+    init_diffusion(n_steps=n_steps, beta_start=beta_start, beta_end=beta_end, device_override=device)
 
 num_epochs = 3
 import argparse
@@ -177,11 +122,8 @@ parser.add_argument('--batch-size', type=int, default=1)
 parser.add_argument('--grad-accum-steps', type=int, default=4)
 args, unknown = parser.parse_known_args()
 args = args
+scaler = GradScaler()
 
-# Enable mixed precision training to reduce memory usage
-scaler = GradScaler(init_scale=2.0)  # Updated to use recommended syntax for 'torch.amp.GradScaler'
-
-writer = SummaryWriter()
 epoch_train_loss = []
 epoch_val_loss = []
 
@@ -211,6 +153,7 @@ if __name__ == '__main__':
     # Define the optimizer and loss function after model initialization
     optimizer = Adam(model.parameters(), lr=0.001)  # Define the optimizer
     criterion = nn.MSELoss()  # Define the loss function for diffusion (MSE between predicted and added noise)
+    writer = SummaryWriter()  # Initialize TensorBoard writer
 
     for epoch in range(num_epochs):
         for batch_idx, batch in enumerate(train_loader):
