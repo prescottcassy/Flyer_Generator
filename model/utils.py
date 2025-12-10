@@ -1,5 +1,5 @@
 import torch
-from setup_env import device, IMG_SIZE, IMG_CH
+from .setup_env import device, IMG_SIZE, IMG_CH, SEED
 import platform
 import subprocess
 import shutil
@@ -8,6 +8,12 @@ import threading
 import http.server as _http_server
 import socketserver
 import os
+from pathlib import Path
+from torch.utils.data import Dataset, DataLoader, Subset
+from torchvision import transforms
+from PIL import Image
+import csv
+import numpy as np
 
 # Helper functions
 def validate_model_parameters(model):
@@ -25,6 +31,7 @@ def validate_model_parameters(model):
 
     print(f"Estimated memory usage: {param_memory:.2f} MB (parameters), "
           f"{grad_memory:.2f} MB (gradients), {buffer_memory:.2f} MB (buffers)")
+
 
 def enable_cpu_offload(model):
     """Enable CPU offloading for the model."""
@@ -175,3 +182,107 @@ def generate_image_with_sdxl(base, refiner, prompt, n_steps=40, high_noise_frac=
     )
     return refined_image
 
+
+# ===== Dataset and DataLoader functions (from model_data_prep.py) =====
+
+def get_transforms(image_size: int = IMG_SIZE, train: bool = True):
+    """Return torchvision transforms for train/validation."""
+    if train:
+        return transforms.Compose([
+            transforms.Resize((image_size, image_size)),
+            transforms.RandomHorizontalFlip(0.5),
+            transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.02),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    else:
+        return transforms.Compose([
+            transforms.Resize((image_size, image_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
+
+class FlyerDataset(Dataset):
+    """Dataset for flyers backed by a CSV annotations file."""
+
+    def __init__(self, csv_path: Path | str, images_dir: Path | str, transform=None):
+        self.csv_path = Path(csv_path)
+        self.images_dir = Path(images_dir)
+        self.transform = transform
+        self.data = []
+        self._class_name_set = set()
+        self.class_names = []
+
+        with self.csv_path.open('r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                self.data.append(row)
+                self._class_name_set.update(row['labels'].split(','))
+
+        self.class_names = sorted(list(self._class_name_set))
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, index):
+        row = self.data[index]
+        image_path = self.images_dir / row['filename']
+        image = Image.open(image_path).convert('RGB')
+        if self.transform:
+            image = self.transform(image)
+
+        labels = row['labels'].split(',')
+        metadata = {'filename': row['filename'], 'labels': row['labels']}
+        label_index = self.class_names.index(labels[0])
+
+        return image, label_index, metadata
+
+
+def deterministic_split(dataset: FlyerDataset, seed: int, splits: tuple = (0.8, 0.1, 0.1)):
+    """Split dataset deterministically into train, val, test."""
+    np.random.seed(seed)
+    n = len(dataset)
+    n_train = int(splits[0] * n)
+    n_val = int(splits[1] * n)
+    
+    perm = np.random.permutation(n)
+    train_idx = perm[:n_train].tolist()
+    val_idx = perm[n_train:n_train + n_val].tolist()
+    test_idx = perm[n_train + n_val:].tolist()
+    
+    return Subset(dataset, train_idx), Subset(dataset, val_idx), Subset(dataset, test_idx)
+
+
+def worker_init_fn(worker_id: int, base_seed: int = SEED):
+    """Seed worker processes for reproducibility."""
+    np.random.seed(base_seed + worker_id)
+
+
+def create_train_loader(data_dir, image_size: int, batch_size: int = 32, splits=(0.8, 0.1, 0.1), seed=SEED, num_workers: int = 4):
+    """
+    Create and return a train DataLoader along with validation and test Subsets.
+    
+    Args:
+        data_dir: path to the dataset root
+        image_size: size to resize images to
+        batch_size: batch size for training
+        splits: tuple of (train_frac, val_frac, test_frac)
+        seed: random seed for reproducibility
+        num_workers: number of workers for DataLoader
+    
+    Returns:
+        (train_loader, val_dataset, test_dataset)
+    """
+    data_dir = Path(data_dir)
+    csv_path = data_dir / 'annotations.csv'
+    dataset = FlyerDataset(csv_path, data_dir / 'images', transform=get_transforms(image_size, train=True))
+    train_ds, val_ds, test_ds = deterministic_split(dataset, seed, splits)
+    train_loader = DataLoader(
+        train_ds, 
+        batch_size=batch_size, 
+        shuffle=True,
+        num_workers=num_workers, 
+        worker_init_fn=lambda wid: worker_init_fn(wid, base_seed=seed)
+    )
+    return train_loader, val_ds, test_ds

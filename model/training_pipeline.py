@@ -1,14 +1,14 @@
-from setup_env import (
-    set_random_seed, 
-    device, 
-    SEED
+from .setup_env import (
+    set_random_seed,
+    device,
+    SEED,
 )
 set_random_seed(SEED)
-from datasets import (
-    make_datasets_and_loaders, 
-    IMG_SIZE, 
+from .model_data_prep import (
+    make_datasets_and_loaders,
+    IMG_SIZE,
     IMG_CH,
-    create_train_loader
+    create_train_loader,
 )
 
 import torch, torch.nn as nn, sys, os, matplotlib.pyplot as plt, json
@@ -22,7 +22,7 @@ from torch.amp.grad_scaler import GradScaler
 from torch.amp.autocast_mode import autocast
 from PIL import Image
 
-from utils import (
+from .utils import (
     validate_model_parameters,
     enable_cpu_offload,
     generate_image,
@@ -32,74 +32,80 @@ from utils import (
     log_pipeline_run,
 )
 
-from sdxl_diffusion import (
+from .diffusion_process import (
     init_diffusion,
     add_noise,
 )
 
-from model.NueralNetwork import SDXL
-
-# Ensure SERVICEACCOUNT is loaded and provide a fallback error message
-api_key = os.getenv('SERVICEACCOUNT')
-if not api_key:
-    raise RuntimeError("SERVICEACCOUNT is not set. Please check your secrets.env file.")
-
-client = InferenceClient(
-    provider="auto",
-    api_key=api_key,
-)
+from .model import SDXL
 
 # Define refiner_model_id globally
 base_model_id = "stabilityai/stable-diffusion-xl-base-1.0"
 refiner_model_id = "stabilityai/stable-diffusion-xl-refiner-1.0"
 
-# Force all operations to run on the CPU
-device = torch.device("cpu")
-print("Using CPU for all operations.")
-
-# Clean GPU memory before loading pipelines
-if torch.cuda.is_available():
-    torch.cuda.empty_cache()
-    torch.cuda.ipc_collect()
-
 # Initialize base and refiner pipelines separately
-base = DiffusionPipeline.from_pretrained(base_model_id)
-base.to(device)
+base = None
+refiner = None
 
-try:
-    refiner = DiffusionPipeline.from_pretrained(refiner_model_id)
-    if refiner:
-        refiner.to(device)
-except torch.OutOfMemoryError:
-    print("Out of GPU memory. Attempting to load refiner on CPU.")
+def load_pipeline():
+    global base, refiner
+    # Ensure SERVICEACCOUNT is loaded and provide a fallback error message
+    api_key = os.getenv('SERVICEACCOUNT')
+    if not api_key:
+        raise RuntimeError("SERVICEACCOUNT is not set. Please check your secrets.env file.")
+
+    client = InferenceClient(
+        provider="auto",
+        api_key=api_key,
+    )
+
+    # Force all operations to run on the CPU
+    device = torch.device("cpu")
+    print("Using CPU for all operations.")
+
+    # Clean GPU memory before loading pipelines
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
+
+    # Initialize base and refiner pipelines separately
+    base = DiffusionPipeline.from_pretrained(base_model_id)
+    base.to(device)
+
     try:
         refiner = DiffusionPipeline.from_pretrained(refiner_model_id)
         if refiner:
-            refiner.to("cpu")
-    except Exception as e:
-        print(f"Failed to initialize refiner pipeline on CPU: {e}")
-        refiner = None
-except Exception as e:
-    print(f"Failed to initialize refiner pipeline: {e}")
-    refiner = None
-
-# Check if refiner is initialized before proceeding
-if not refiner:
-    print("Warning: Refiner pipeline is not initialized. Proceeding without it.")
-
-# Set PyTorch CUDA memory configuration to reduce fragmentation
-os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
-
-# Try to move the refiner pipeline to the GPU
-# Ensure refiner is not None before moving to device
-if refiner is not None:
-    try:
-        refiner.to(device)
+            refiner.to(device)
     except torch.OutOfMemoryError:
         print("Out of GPU memory. Attempting to load refiner on CPU.")
-        refiner.to("cpu")
-else:
-    print("Warning: Refiner pipeline is not initialized. Proceeding without it.")
+        try:
+            refiner = DiffusionPipeline.from_pretrained(refiner_model_id)
+            if refiner:
+                refiner.to("cpu")
+        except Exception as e:
+            print(f"Failed to initialize refiner pipeline on CPU: {e}")
+        refiner = None
+    except Exception as e:
+        print(f"Failed to initialize refiner pipeline: {e}")
+        refiner = None
+
+    # Check if refiner is initialized before proceeding
+    if not refiner:
+        print("Warning: Refiner pipeline is not initialized. Proceeding without it.")
+
+    # Set PyTorch CUDA memory configuration to reduce fragmentation
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
+    # Try to move the refiner pipeline to the GPU
+    # Ensure refiner is not None before moving to device
+    if refiner is not None:
+        try:
+            refiner.to(device)
+        except torch.OutOfMemoryError:
+            print("Out of GPU memory. Attempting to load refiner on CPU.")
+            refiner.to("cpu")
+    else:
+        print("Warning: Refiner pipeline is not initialized. Proceeding without it.")
 
 # Initialize the diffusion noise schedule
 n_steps = 1000
@@ -113,7 +119,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--gen-enabled', action='store_true')
 parser.add_argument('--batch-size', type=int, default=1)
 parser.add_argument('--grad-accum-steps', type=int, default=4)
-args = parser.parse_args()
+args, unknown = parser.parse_known_args()
+args = args
 
 # Enable mixed precision training to reduce memory usage
 scaler = GradScaler(init_scale=2.0)  # Updated to use recommended syntax for 'torch.amp.GradScaler'
