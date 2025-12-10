@@ -13,4 +13,5 @@ torchvision
 # API
 fastapi
 uvicorn
+tensorboard
 
