@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
+import { Routes, Route, Link } from 'react-router-dom'
 import * as GenerateModule from './pages/Generate.jsx'
 import * as UploadModule from './pages/Upload.jsx'
 import * as GalleryModule from './pages/Gallery.jsx'
@@ -15,17 +15,14 @@ function App() {
   return (
     <>
       <h1>Create Your Perfect Flyer</h1>
-     
-      <BrowserRouter>
-        <nav>
-          <Link to="/">Generate</Link> | <Link to="/upload">Upload</Link> | <Link to="/gallery">Gallery</Link>
-        </nav>
-        <Routes>
-          <Route path="/" element={<Generate />} />
-          <Route path="/upload" element={<Upload />} />
-          <Route path="/gallery" element={<Gallery />} />
-        </Routes>
-      </BrowserRouter>
+      <nav>
+        <Link to="/">Generate</Link> | <Link to="/upload">Upload</Link> | <Link to="/gallery">Gallery</Link>
+      </nav>
+      <Routes>
+        <Route path="/" element={<Generate />} />
+        <Route path="/upload" element={<Upload />} />
+        <Route path="/gallery" element={<Gallery />} />
+      </Routes>
     </>
   )
 }
