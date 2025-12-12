@@ -9,16 +9,16 @@ function App() {
   return (
     <>
       <h1>Create Your Perfect Flyer</h1>
-      <nav>
+        <nav>
         <Link to="/">Generate</Link> | 
         <Link to="/upload">Upload</Link> | 
         <Link to="/gallery">Gallery</Link>
-      </nav>
-      <Routes>
-        <Route path="/" element={<Generate />} />
-        <Route path="/upload" element={<Upload />} />
-        <Route path="/gallery" element={<Gallery />} />
-      </Routes>
+        </nav> 
+        <Routes>
+          <Route path="/" element={<Generate />} />
+          <Route path="/upload" element={<Upload />} />
+          <Route path="/gallery" element={<Gallery />} />
+        </Routes>
     </>
   );
 }
