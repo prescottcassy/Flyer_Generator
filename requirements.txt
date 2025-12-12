@@ -15,4 +15,5 @@ tensorboard
 # API
 fastapi
 uvicorn
+python-multipart
 
