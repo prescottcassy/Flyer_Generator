@@ -3,6 +3,7 @@ python-dotenv
 numpy
 Pillow
 matplotlib
+accelerate
 
 # ML packages
 diffusers
