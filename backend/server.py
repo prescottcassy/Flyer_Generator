@@ -135,3 +135,13 @@ def generate(req: GenRequest):
         # Otherwise return a short error message
         tb = traceback.format_exc()
         raise HTTPException(status_code=500, detail={"error": str(e), "traceback": tb})
+
+@app.post("/upload")
+def upload_image(file: UploadFile = File(...)):
+    # handle file upload
+    return {"status": "ok"}
+
+@app.get("/list")
+def list_images():
+    # return list of stored images
+    return {"images": [...]}
