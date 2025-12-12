@@ -73,7 +73,10 @@ def load_pipeline():
     except Exception as e:
         logger.exception("Error loading training_pipeline on startup: %s", e)
 
-
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "Backend is running"}
+    
 @app.get("/health")
 def health():
     """Return basic status and whether the model pipeline appears ready."""
