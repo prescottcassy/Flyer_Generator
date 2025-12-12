@@ -137,7 +137,7 @@ def generate(req: GenRequest):
         raise HTTPException(status_code=500, detail={"error": str(e), "traceback": tb})
 
 @app.post("/upload")
-def upload_image(file: UploadFile = File(...)):
+async def upload_image(file: UploadFile = File(...)):
     # handle file upload
     contents = await file.read()
     return {"filename": file.filename, "size": len(contents)}
