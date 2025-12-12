@@ -16,4 +16,6 @@ tensorboard
 fastapi
 uvicorn
 python-multipart
+httpx
+pydantic
 
