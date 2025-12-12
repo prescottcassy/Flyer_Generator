@@ -8,8 +8,25 @@ export async function generate(prompt, num_steps = 50) {
   const res = await fetch(`${API_BASE}/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, num_inference_steps: num_steps }),
+    body: JSON.stringify({ 
+      prompt, 
+      num_inference_steps: num_steps,
+      width: 1024,
+      height: 1024
+    }),
   });
+  
+  if (!res.ok) {
+    const error = await res.text();
+    throw new Error(`Generation failed (${res.status}): ${error}`);
+  }
+
+  const data = await res.json();
+  
+  return {
+    image_url: `data:image/png;base64,${data.image_base64}`,
+    seed: data.seed,
+  };
 
   const text = await res.text();
   // Try to parse JSON when possible
