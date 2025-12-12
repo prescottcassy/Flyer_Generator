@@ -1,11 +1,12 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from starlette.middleware.cors import CORSMiddleware
-from model.utils import generate_image
 from pydantic import BaseModel
 import logging
 import os
-import traceback
+import httpx
+from dotenv import load_dotenv
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
@@ -19,133 +20,83 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+DEEPINFRA_API_KEY = os.getenv("DEEPINFRA_API_KEY")
+DEEPINFRA_BASE = "https://api.deepinfra.com/v1/inference"
 
 class GenRequest(BaseModel):
     prompt: str
     num_inference_steps: int = 50
-
-
-@app.on_event("startup")
-def load_pipeline():
-    """Attempt to import the training pipeline on startup. 
-    """
-    # Allow users to set SERVICEACCOUNT by pointing to a local JSON file path
-    # (SERVICEACCOUNT_PATH). This keeps private keys off the repo while letting
-    # the server load the secret into the environment for libraries that
-    # expect the JSON as a single env var.
-    import os
-    sa_path = os.getenv("SERVICEACCOUNT_PATH")
-    if sa_path and not os.getenv("SERVICEACCOUNT"):
-        try:
-            with open(sa_path, "r", encoding="utf-8") as fh:
-                os.environ["SERVICEACCOUNT"] = fh.read()
-            logger.info("Loaded SERVICEACCOUNT from SERVICEACCOUNT_PATH: %s", sa_path)
-        except Exception as e:
-            logger.exception("Failed to load SERVICEACCOUNT from path %s: %s", sa_path, e)
-
-    # If SERVICEACCOUNT is still not set, try to load from SERVICEACCOUNT.env file
-    if not os.getenv("SERVICEACCOUNT"):
-        try:
-            with open("SERVICEACCOUNT.env", "r", encoding="utf-8") as fh:
-                os.environ["SERVICEACCOUNT"] = fh.read()
-            logger.info("Loaded SERVICEACCOUNT from SERVICEACCOUNT.env")
-        except FileNotFoundError:
-            logger.info("SERVICEACCOUNT.env not found; skipping pipeline load")
-        except Exception as e:
-            logger.exception("Failed to load SERVICEACCOUNT from SERVICEACCOUNT.env: %s", e)
-
-    # Only attempt to import the training pipeline at startup if SERVICEACCOUNT
-    # is present. This avoids startup failures when developers run the server
-    # locally for frontend work without secrets or heavy ML packages installed.
-    if not os.getenv("SERVICEACCOUNT"):
-        logger.info("SERVICEACCOUNT not set; skipping training pipeline import on startup.")
-        return
-
-    try:
-        import importlib
-
-        training_pipeline = importlib.import_module("model.training_pipeline")
-        training_pipeline.load_pipeline()
-        if not hasattr(training_pipeline, "base") or training_pipeline.base is None:
-            logger.warning("`training_pipeline` imported but `base` pipeline not loaded.")
-        else:
-            logger.info("Model pipeline loaded successfully.")
-    except Exception as e:
-        logger.exception("Error loading training_pipeline on startup: %s", e)
+    width: int = 1024
+    height: int = 1024
+    guidance_scale: float = 7.5
 
 @app.get("/")
 def root():
     return {"status": "ok", "message": "Backend is running"}
     
 @app.get("/health")
-def health():
-    """Return basic status and whether the model pipeline appears ready."""
-    try:
-        import importlib
-
-        training_pipeline = importlib.import_module("model.training_pipeline")
-        pipeline = getattr(training_pipeline, "base", None)
-        ready = pipeline is not None
-    except Exception:
-        ready = False
-    return {"status": "ok", "pipeline_ready": ready}
-
+async def health():
+    """Check if DeepInfra API is accessible."""
+    if not DEEPINFRA_API_KEY:
+        return {"status": "error", "message": "DEEPINFRA_API_KEY not set"}
+    return {"status": "ok", "provider": "deepinfra", "api_key_set": bool(DEEPINFRA_API_KEY)}
 
 @app.post("/generate")
-def generate(req: GenRequest):
-    try:
-        import io, base64
-
-        # Try to load SERVICEACCOUNT from SERVICEACCOUNT_PATH at request time
-        # This helps when the server was started without secrets but the
-        # developer later sets a local path env var before calling /generate.
-        sa_path = os.getenv("SERVICEACCOUNT_PATH")
-        if sa_path and not os.getenv("SERVICEACCOUNT"):
-            try:
-                with open(sa_path, "r", encoding="utf-8") as fh:
-                    os.environ["SERVICEACCOUNT"] = fh.read()
-                logger.info("Loaded SERVICEACCOUNT from SERVICEACCOUNT_PATH during /generate: %s", sa_path)
-            except Exception:
-                logger.exception("Failed to load SERVICEACCOUNT from SERVICEACCOUNT_PATH during /generate: %s", sa_path)
-
-        if not os.getenv("SERVICEACCOUNT"):
-            raise HTTPException(status_code=500, detail="SERVICEACCOUNT not set; cannot generate images without secrets.")
-        else:
-            import importlib
-
-            training_pipeline = importlib.import_module("model.training_pipeline")
-            if training_pipeline.base is None:
-                training_pipeline.load_pipeline()
-            if training_pipeline.base is None:
-                raise RuntimeError("Model pipeline not initialized or unavailable.")
-            else:
-                # `generate_image` expects (pipeline, prompt, num_inference_steps, ...)
-                img = generate_image(training_pipeline.base, req.prompt, req.num_inference_steps)
-
-        buffered = io.BytesIO()
-        img.save(buffered, format="PNG")
-        b64 = base64.b64encode(buffered.getvalue()).decode("ascii")
-        return {"image": b64}
-    except Exception as e:
-        # Log full exception to server console
-        logger.exception("Error during generation: %s", e)
-
-        # If DEV_DEBUG is set, include full traceback in the HTTP response
-        if os.getenv("DEV_DEBUG", "0").lower() in ("1", "true", "yes"):
-            tb = traceback.format_exc()
-            raise HTTPException(status_code=500, detail={"error": str(e), "traceback": tb})
-
-        # Otherwise return a short error message
-        tb = traceback.format_exc()
-        raise HTTPException(status_code=500, detail={"error": str(e), "traceback": tb})
+async def generate(req: GenRequest):
+    """Generate image using DeepInfra's SDXL API."""
+    if not DEEPINFRA_API_KEY:
+        raise HTTPException(
+            status_code=500, 
+            detail="DEEPINFRA_API_KEY not set. Add it to your .env file."
+        )
+    
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            response = await client.post(
+                f"{DEEPINFRA_BASE}/stabilityai/sdxl",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {DEEPINFRA_API_KEY}",
+                },
+                json={
+                    "prompt": req.prompt,
+                    "num_inference_steps": req.num_inference_steps,
+                    "width": req.width,
+                    "height": req.height,
+                    "guidance_scale": req.guidance_scale,
+                    "negative_prompt": "blurry, low quality, distorted, text, watermark",
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            # Return base64 image
+            return {
+                "image": data["images"][0],
+                "seed": data.get("seed"),
+            }
+            
+        except httpx.HTTPStatusError as e:
+            logger.error(f"DeepInfra API error: {e.response.text}")
+            raise HTTPException(
+                status_code=e.response.status_code,
+                detail=f"DeepInfra API error: {e.response.text}"
+            )
+        except Exception as e:
+            logger.exception("Error during generation")
+            raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/upload")
 async def upload_image(file: UploadFile = File(...)):
-    # handle file upload
+    """Handle file upload (optional - for future features)."""
     contents = await file.read()
     return {"filename": file.filename, "size": len(contents)}
 
 @app.get("/list")
 def list_images():
-    # return list of stored images
-    return {"images": [...]}
+    """Return list of stored images (optional - for future features)."""
+    return {"images": []}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
