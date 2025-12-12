@@ -2,6 +2,8 @@ import { Routes, Route, Link } from 'react-router-dom';
 import Generate from './pages/Generate.jsx';
 import Upload from './pages/Upload.jsx';
 import Gallery from './pages/Gallery.jsx';
+import './App.css';
+
 
 function App() {
   return (
