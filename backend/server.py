@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from starlette.middleware.cors import CORSMiddleware
 from model.utils import generate_image
 from pydantic import BaseModel
@@ -139,7 +139,8 @@ def generate(req: GenRequest):
 @app.post("/upload")
 def upload_image(file: UploadFile = File(...)):
     # handle file upload
-    return {"status": "ok"}
+    contents = await file.read()
+    return {"filename": file.filename, "size": len(contents)}
 
 @app.get("/list")
 def list_images():
