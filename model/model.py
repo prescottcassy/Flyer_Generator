@@ -232,20 +232,15 @@ class EmbedDrawingConditioning(nn.Module):
     
 class SDXL(nn.Module):
     def __init__(self, img_channels, img_size, down_channels, t_embed_dim, c_embed_dim, num_classes: int = 0, device=None):
-        """
-        SDXL model constructor.
-
-        Args:
-            img_channels (int): Number of image channels.
-            img_size (int): Spatial size of images (H==W).
-            down_channels (tuple): Channel widths for downsampling path.
-            t_embed_dim (int): Dimensionality of time embedding.
-            c_embed_dim (int): Dimensionality of class embedding.
-            num_classes (int): Number of classes for class embedding. If zero,
-                a minimal embedding of size 1 is created to avoid errors.
-            device (torch.device or str, optional): The device to initialize the model on (e.g., 'cuda', 'cpu').
-        """
         super().__init__()
+
+        # Save constructor arguments as attributes
+        self.img_channels = img_channels
+        self.img_size = img_size
+        self.down_channels = down_channels
+        self.t_embed_dim = t_embed_dim
+        self.c_embed_dim = c_embed_dim
+        self.num_classes = num_classes
 
         # Store model channel dimension for later use
         self.model_channels = down_channels[-1]
@@ -315,6 +310,7 @@ class SDXL(nn.Module):
         # Move model to the specified device (done once at init)
         if device is not None:
             self.to(device)
+
 
     def forward(self, x, t, c):
         """
