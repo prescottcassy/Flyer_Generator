@@ -3,6 +3,7 @@ from .setup_env import device, IMG_SIZE, IMG_CH, SEED
 import platform
 import subprocess
 import shutil
+import requests
 import webbrowser
 import threading
 import http.server as _http_server
@@ -41,11 +42,14 @@ def enable_cpu_offload(model):
     except Exception as e:
         print(f"Failed to offload model to CPU: {e}")
 
-def generate_image(pipeline, prompt, num_inference_steps=50):
-    """Generate an image from a text prompt using the diffusion pipeline."""
-    with torch.no_grad():
-        result = pipeline(prompt, num_inference_steps=num_inference_steps)
-        return result.images[0]
+def generate_image(prompt, num_inference_steps=50):
+    resp = requests.post(
+        "https://api.deepinfra.com/v1/inference/stabilityai/stable-diffusion",
+        headers={"Authorization": f"Bearer {os.getenv('DEEPINFRA_API_KEY')}"},
+        json={"prompt": prompt, "num_inference_steps": num_inference_steps}
+    )
+    return resp.json()
+
 
 def save_image(image, path):
     """
