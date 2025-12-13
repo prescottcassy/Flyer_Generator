@@ -1,100 +1,66 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from starlette.middleware.cors import CORSMiddleware
-from model.utils import generate_image
-from pydantic import BaseModel
+import io
+import base64
 import logging
-import os
-import traceback
+from fastapi import FastAPI
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
-logger = logging.getLogger(__name__)
+# Import your own pipeline loader and generator
+from model import training_pipeline
+from model.training_pipeline import load_pipeline, generate_image
 
+# -------------------------------------------------------------------
+# FastAPI setup
+# -------------------------------------------------------------------
 app = FastAPI()
 
-# Development-friendly CORS: allow all origins to simplify local dev.
+# Allow CORS for your frontend (GitHub Pages domain)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # you can restrict to ["https://prescottcassy.github.io"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-class GenRequest(BaseModel):
+# -------------------------------------------------------------------
+# Request schema
+# -------------------------------------------------------------------
+class GenerateRequest(BaseModel):
     prompt: str
     num_inference_steps: int = 50
 
-
+# -------------------------------------------------------------------
+# Startup event
+# -------------------------------------------------------------------
 @app.on_event("startup")
-def load_pipeline():
-    """Attempt to import the training pipeline on startup using DeepInfra API key."""
-    api_key = os.getenv("DEEPINFRA_API_KEY")
-    if not api_key:
-        logger.info("DEEPINFRA_API_KEY not set; skipping training pipeline import on startup.")
-        return
+async def startup_event():
+    # Load your custom SDXL pipeline
+    load_pipeline()
+    logging.info("Custom SDXL pipeline initialized.")
 
-    try:
-        import importlib
-        training_pipeline = importlib.import_module("model.training_pipeline")
-        training_pipeline.load_pipeline()
-        if not hasattr(training_pipeline, "base") or training_pipeline.base is None:
-            logger.warning("`training_pipeline` imported but `base` pipeline not loaded.")
-        else:
-            logger.info("Model pipeline loaded successfully with DeepInfra API key.")
-    except Exception as e:
-        logger.exception("Error loading training_pipeline on startup: %s", e)
-
-@app.get("/")
-def root():
-    return {"status": "ok", "message": "Backend is running"}
-    
+# -------------------------------------------------------------------
+# Health check
+# -------------------------------------------------------------------
 @app.get("/health")
-def health():
-    """Return basic status and whether the model pipeline appears ready."""
-    try:
-        import importlib
-        training_pipeline = importlib.import_module("model.training_pipeline")
-        pipeline = getattr(training_pipeline, "base", None)
-        ready = pipeline is not None
-    except Exception:
-        ready = False
-    return {"status": "ok", "pipeline_ready": ready}
+async def health():
+    return {"status": "ok"}
 
-
+# -------------------------------------------------------------------
+# Generate route
+# -------------------------------------------------------------------
 @app.post("/generate")
-def generate(req: GenRequest):
+async def generate(req: GenerateRequest):
     try:
-        import io, base64
+        # Run inference with your SDXL model
+        img = generate_image(training_pipeline.base, req.prompt, req.num_inference_steps)
 
-        api_key = os.getenv("DEEPINFRA_API_KEY")
-        if not api_key:
-            raise HTTPException(status_code=500, detail="DEEPINFRA_API_KEY not set; cannot generate images.")
-
-        import importlib
-        training_pipeline = importlib.import_module("model.training_pipeline")
-        if training_pipeline.base is None:
-            training_pipeline.load_pipeline()
-        if training_pipeline.base is None:
-            raise RuntimeError("Model pipeline not initialized or unavailable.")
-        else:
-            img = generate_image(training_pipeline.base, req.prompt, req.num_inference_steps)
-
+        # Encode to base64 for frontend
         buffered = io.BytesIO()
         img.save(buffered, format="PNG")
         b64 = base64.b64encode(buffered.getvalue()).decode("ascii")
+
         return {"image": b64}
     except Exception as e:
-        logger.exception("Error during generation: %s", e)
-        tb = traceback.format_exc()
-        raise HTTPException(status_code=500, detail={"error": str(e), "traceback": tb})
-
-@app.post("/upload")
-async def upload_image(file: UploadFile = File(...)):
-    # handle file upload
-    contents = await file.read()
-    return {"filename": file.filename, "size": len(contents)}
-
-@app.get("/list")
-def list_images():
-    # return list of stored images
-    return {"images": [...]}
+        logging.exception("Error during generation")
+        return {"detail": str(e)}
