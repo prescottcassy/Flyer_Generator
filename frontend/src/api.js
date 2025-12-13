@@ -1,6 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL;
-
-console.log("API URL:", import.meta.env.VITE_API_URL);
+const API_BASE = https://zonal-cooperation-production.up.railway.app/
 
 export async function health() {
   return fetch(`${API_BASE}/health`).then(r => r.json());
