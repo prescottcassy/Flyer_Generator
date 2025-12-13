@@ -1,4 +1,4 @@
-const API_BASE = "https://zonal-cooperation-production.up.railway.app/"
+const API_BASE = "https://zonal-cooperation-production.up.railway.app"
 
 export async function health() {
   return fetch(`${API_BASE}/health`).then(r => r.json());
@@ -15,18 +15,19 @@ export async function generate(prompt, num_steps = 50) {
       height: 1024
     }),
   });
-  
+
   if (!res.ok) {
     const error = await res.text();
     throw new Error(`Generation failed (${res.status}): ${error}`);
   }
 
   const data = await res.json();
-  
+
   return {
-    image_url: `data:image/png;base64,${data.image_base64}`,
+    image_url: `data:image/png;base64,${data.image}`, // match backend field
     seed: data.seed,
   };
+}
 
   const text = await res.text();
   // Try to parse JSON when possible
