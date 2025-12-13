@@ -74,23 +74,27 @@ def load_pipeline():
 # Image generation using your model
 # -------------------------------------------------------------------
 def generate_image(pipeline, prompt, num_inference_steps=50):
-    """
-    Run inference using your custom SDXL model.
-    """
     if pipeline is None:
         raise RuntimeError("Pipeline not initialized.")
 
     with torch.no_grad():
-        # Example: forward pass with noise schedule
-        noise = torch.randn((1, pipeline.img_channels, IMG_SIZE, IMG_SIZE), device=device)
+        noise = torch.randn((1, pipeline.img_channels, pipeline.img_size, pipeline.img_size), device=device)
         t = torch.randint(0, num_inference_steps, (1,), device=device)
-        c = torch.zeros((1,), device=device)  # dummy class label
+        c = torch.zeros((1,), device=device)
 
-        outputs = pipeline(noise, t, c)
+        outputs = pipeline(noise, t, c)  # shape: (B, C, H, W)
 
-    # Convert tensor to PIL image
-    img = (outputs.squeeze().cpu().clamp(0, 1) * 255).byte()
-    pil_img = Image.fromarray(img.numpy())
+    # Convert to numpy image
+    img = outputs.squeeze(0)            # remove batch → (C, H, W)
+    img = img.permute(1, 2, 0)          # reorder → (H, W, C)
+    img = img.cpu().clamp(0, 1) * 255   # scale to [0,255]
+    img = img.byte().numpy()
+
+    # Handle grayscale vs RGB
+    if img.shape[2] == 1:
+        img = img.squeeze(2)            # (H, W) for grayscale
+
+    pil_img = Image.fromarray(img)
     return pil_img
 
 # -------------------------------------------------------------------
