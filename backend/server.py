@@ -52,14 +52,10 @@ async def health():
 @app.post("/generate")
 async def generate(req: GenerateRequest):
     try:
-        # Run inference with your SDXL model
         img = generate_image(training_pipeline.base, req.prompt, req.num_inference_steps)
-
-        # Encode to base64 for frontend
         buffered = io.BytesIO()
         img.save(buffered, format="PNG")
         b64 = base64.b64encode(buffered.getvalue()).decode("ascii")
-
         return {"image": b64}
     except Exception as e:
         logging.exception("Error during generation")
