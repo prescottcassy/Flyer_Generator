@@ -30,6 +30,7 @@ from .diffusion_process import (
 )
 
 from .model import SDXL
+from diffusers import DiffusionPipeline
 
 # Constants
 IMG_SIZE = 512
@@ -46,7 +47,7 @@ base_model_id = "stabilityai/stable-diffusion-xl-base-1.0"
 refiner_model_id = "stabilityai/stable-diffusion-xl-refiner-1.0"
 
 # Pipeline placeholders
-base = None
+base = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion", use_auth_token=os.getenv("DEEPINFRA_API_KEY"))
 refiner = None
 
 def load_pipeline():
