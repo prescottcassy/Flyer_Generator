@@ -1,4 +1,4 @@
-const API_BASE = https://zonal-cooperation-production.up.railway.app/
+const API_BASE = "https://zonal-cooperation-production.up.railway.app/"
 
 export async function health() {
   return fetch(`${API_BASE}/health`).then(r => r.json());
