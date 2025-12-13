@@ -176,8 +176,3 @@ if __name__ == '__main__':
     # Benchmark
     input_data = torch.randn((args.batch_size, IMG_CH, IMG_SIZE, IMG_SIZE), device=device)
     benchmark_metrics(model, input_data, device=str(device))
-
-    plt.plot(epoch_train_loss, label='Train Loss')
-    plt.show()
-    plt.plot(epoch_val_loss, label='Val Loss')
-    plt.show()
