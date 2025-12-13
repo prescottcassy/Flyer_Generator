@@ -1,4 +1,4 @@
-const API_BASE = "https://zonal-cooperation-production.up.railway.app"
+const API_BASE = "https://zonal-cooperation-production.up.railway.app";
 
 export async function health() {
   return fetch(`${API_BASE}/health`).then(r => r.json());
@@ -24,29 +24,9 @@ export async function generate(prompt, num_steps = 50) {
   const data = await res.json();
 
   return {
-    image_url: `data:image/png;base64,${data.image}`, // match backend field
+    image_url: `data:image/png;base64,${data.image}`, // backend returns "image"
     seed: data.seed,
   };
-}
-
-  const text = await res.text();
-  // Try to parse JSON when possible
-  let payload;
-  try {
-    payload = text ? JSON.parse(text) : null;
-  } catch (e) {
-    // Not JSON — return raw text on success, otherwise throw
-    if (res.ok) return { text };
-    throw new Error(`HTTP ${res.status}: ${text}`);
-  }
-
-  if (!res.ok) {
-    // If server returned structured error, include it
-    const errDetail = payload?.detail?.error || payload?.detail || JSON.stringify(payload);
-    throw new Error(`HTTP ${res.status}: ${errDetail}`);
-  }
-
-  return payload;
 }
 
 export async function uploadImage(formData) {
