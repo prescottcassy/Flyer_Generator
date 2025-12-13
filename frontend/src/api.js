@@ -1,5 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_URL;
 
+console.log("API URL:", import.meta.env.VITE_API_URL);
+
 export async function health() {
   return fetch(`${API_BASE}/health`).then(r => r.json());
 }
