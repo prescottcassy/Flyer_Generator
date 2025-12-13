@@ -22,11 +22,13 @@ export async function generate(prompt, num_steps = 50) {
   }
 
   const data = await res.json();
-  if (!data.image) throw new Error(`Unexpected response: ${JSON.stringify(data)}`);
-  return {
-    image_url: `data:image/png;base64,${data.image}`, // backend returns "image"
-    seed: data.seed,
-  };
+  if (data.image) {
+    return { image_url: `data:image/png;base64,${data.image}` };
+  }
+  if (data.detail) {
+    throw new Error(`Generation failed: ${data.detail}`);
+  }
+  throw new Error(`Unexpected response: ${JSON.stringify(data)}`);
 }
 
 export async function uploadImage(formData) {
