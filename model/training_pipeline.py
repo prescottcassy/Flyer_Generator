@@ -122,108 +122,308 @@ writer = SummaryWriter()
 epoch_train_loss = []
 epoch_val_loss = []
 
+def train_model(train_loader, val_loader, model, optimizer, criterion, num_epochs, device, scaler, writer, args):
+    """
+    Main training loop for the SDXL diffusion model.
+    
+    Args:
+        train_loader: PyTorch DataLoader for training data
+        val_loader: PyTorch DataLoader for validation data
+        model: SDXL model instance
+        optimizer: PyTorch optimizer
+        criterion: Loss function
+        num_epochs: Number of training epochs
+        device: Device to train on (cuda/cpu)
+        scaler: GradScaler for mixed precision training
+        writer: TensorBoard SummaryWriter
+        args: Parsed command line arguments
+    """
+    print(f"Starting training on device: {device}")
+    print(f"Number of epochs: {num_epochs}")
+    print(f"Batch size: {args.batch_size}")
+    print(f"Gradient accumulation steps: {args.grad_accum_steps}")
+    
+    global epoch_train_loss, epoch_val_loss
+    
+    for epoch in range(num_epochs):
+        model.train()
+        train_loss = 0.0
+        num_batches = 0
+        
+        print(f"\nEpoch {epoch + 1}/{num_epochs}")
+        print("-" * 50)
+        
+        for batch_idx, batch in enumerate(train_loader):
+            try:
+                data, labels, metadata = batch
+                data, labels = data.to(device), labels.to(device).long()
+
+                # Sample random timesteps
+                t = torch.randint(0, n_steps, (data.size(0),), device=device)
+
+                # Add noise to the data using the diffusion process
+                noisy_data, added_noise = add_noise(data, t)
+
+                # Conditioning input from labels
+                c = labels
+
+                # Validate model parameters before forward pass
+                validate_model_parameters(model)
+                enable_cpu_offload(model)
+
+                # Forward pass with mixed precision
+                device_type = 'cuda' if device.type == 'cuda' else 'cpu'
+                with autocast(device_type=device_type):
+                    # Predict noise from noisy image
+                    predicted_noise = model(noisy_data, t, c)
+                    loss = criterion(predicted_noise, added_noise)
+
+                # Backward pass with gradient scaling
+                scaler.scale(loss).backward()
+                
+                train_loss += loss.item()
+                num_batches += 1
+
+                # Gradient accumulation
+                if (batch_idx + 1) % args.grad_accum_steps == 0:
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad()
+                    
+                    # Log loss to TensorBoard
+                    global_step = epoch * len(train_loader) + batch_idx
+                    writer.add_scalar('Loss/train_step', loss.item(), global_step)
+
+                if (batch_idx + 1) % 10 == 0:
+                    print(f"Batch {batch_idx + 1}/{len(train_loader)}, "
+                          f"Loss: {loss.item():.4f}")
+
+            except Exception as e:
+                print(f"Error in training batch {batch_idx}: {str(e)}")
+                continue
+
+        # Calculate epoch average loss
+        avg_train_loss = train_loss / max(num_batches, 1)
+        epoch_train_loss.append(avg_train_loss)
+        
+        print(f"Epoch {epoch + 1} - Average Training Loss: {avg_train_loss:.4f}")
+        writer.add_scalar('Loss/train_epoch', avg_train_loss, epoch)
+
+        # Validation phase
+        model.eval()
+        val_loss = 0.0
+        num_val_batches = 0
+        
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(val_loader):
+                try:
+                    data, labels, metadata = batch
+                    data, labels = data.to(device), labels.to(device).long()
+
+                    t = torch.randint(0, n_steps, (data.size(0),), device=device)
+                    noisy_data, added_noise = add_noise(data, t)
+                    c = labels
+
+                    device_type = 'cuda' if device.type == 'cuda' else 'cpu'
+                    with autocast(device_type=device_type):
+                        predicted_noise = model(noisy_data, t, c)
+                        loss = criterion(predicted_noise, added_noise)
+
+                    val_loss += loss.item()
+                    num_val_batches += 1
+
+                except Exception as e:
+                    print(f"Error in validation batch {batch_idx}: {str(e)}")
+                    continue
+
+        avg_val_loss = val_loss / max(num_val_batches, 1)
+        epoch_val_loss.append(avg_val_loss)
+        
+        print(f"Epoch {epoch + 1} - Average Validation Loss: {avg_val_loss:.4f}")
+        writer.add_scalar('Loss/val_epoch', avg_val_loss, epoch)
+        
+        # Save model checkpoint
+        checkpoint_path = f"model_checkpoint_epoch_{epoch + 1}.pt"
+        torch.save(model.state_dict(), checkpoint_path)
+        print(f"Model checkpoint saved: {checkpoint_path}")
+
+
+def generate_images_from_model(base, refiner, prompts, num_inference_steps=50):
+    """
+    Generate images using the SDXL diffusion pipeline.
+    
+    Args:
+        base: Base SDXL pipeline
+        refiner: Refiner SDXL pipeline (optional)
+        prompts: List of text prompts for image generation
+        num_inference_steps: Number of inference steps
+    """
+    print(f"\nGenerating images with {num_inference_steps} inference steps...")
+    
+    if base is None:
+        print("Error: Base pipeline is not initialized. Cannot generate images.")
+        return
+
+    generated_images = []
+    
+    for idx, prompt in enumerate(prompts):
+        try:
+            print(f"Generating image {idx + 1}/{len(prompts)}: {prompt[:50]}...")
+            
+            generated_image = generate_image(
+                base, 
+                prompt, 
+                num_inference_steps=num_inference_steps
+            )
+            
+            image_name = f"generated_image_{idx + 1}.png"
+            save_image(generated_image, image_name)
+            print(f"Image saved: {image_name}")
+            
+            generated_images.append((image_name, prompt))
+            
+            # Log to pipeline run
+            log_pipeline_run(prompt, num_inference_steps, idx)
+            
+        except Exception as e:
+            print(f"Error generating image for prompt '{prompt}': {str(e)}")
+            continue
+    
+    return generated_images
+
+
 if __name__ == '__main__':
     # Wrap the main execution logic inside this guard
-
-    # Correct the unpacking of the tuple returned by create_train_loader
-    train_loader, val_loader, test_loader = create_train_loader(
-        data_dir='C:/Users/presc/AppData/Local/Temp/_tmp_flyers',  # Updated to use the temporary directory
-        image_size=IMG_SIZE,
-        batch_size=args.batch_size,
-        splits=(0.8, 0.1, 0.1),
-        seed=42,
-        num_workers=0  # Set to 0 to avoid multiprocessing issues on Windows
-    )
-
-    # Ensure model is initialized before use
-    model = SDXL(
-        img_channels=IMG_CH,
-        img_size=IMG_SIZE,
-        down_channels=(32, 64, 128, 256),
-        t_embed_dim=128,
-        c_embed_dim=128,
-        num_classes=10
-    ).to(device)
-
-    # Define the optimizer and loss function after model initialization
-    optimizer = Adam(model.parameters(), lr=0.001)  # Define the optimizer
-    criterion = nn.MSELoss()  # Define the loss function for diffusion (MSE between predicted and added noise)
-
-    for epoch in range(num_epochs):
-        for batch_idx, batch in enumerate(train_loader):
-            data, labels, metadata = batch
-            data, labels = data.to(device), labels.to(device).long()
-
-            # Sample random timesteps
-            t = torch.randint(0, n_steps, (data.size(0),), device=device)
-
-            # Add noise to the data
-            noisy_data, added_noise = add_noise(data, t)
-
-            # Conditioning input from labels
-            c = labels
-
-            # Debugging logs
-            print(f"Data shape: {data.shape}, Labels: {labels}, t: {t}, c: {c}")
-
-            validate_model_parameters(model)
-            enable_cpu_offload(model)
-
-            with autocast(device_type='cuda'):
-                # Forward pass
-                outputs = model(noisy_data, t, c)
-                loss = criterion(outputs, added_noise)
-
-            print(f"Epoch {epoch}, Batch {batch_idx}, Loss: {loss.item()}")
-
-            # Scale the loss and backpropagate
-            scaler.scale(loss).backward()
-
-            # Gradient accumulation
-            if (batch_idx + 1) % args.grad_accum_steps == 0:
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
-
-    if writer:
-        writer.close()
-
-    print("Before gen check")
-    print(f"args.gen_enabled: {args.gen_enabled}")
-    print(f"base is not None: {base is not None}")
-    if args.gen_enabled and base is not None:
-        print(f"gen_enabled: {args.gen_enabled}, base is not None: {base is not None}")
-        print("Starting image generation...")
-        # Use the trained model in the pipeline
-        # base.unet = model  # Temporarily comment out to use original model
-        try:
-            prompt = "A flyer that matches the brand for a mimosa and mingle event on November 8th from 10 to noon"
-            num_inference_steps = 50
-            generated_image = generate_image(base, prompt, num_inference_steps=num_inference_steps)
-            save_image(generated_image, "generated_image.png")
-            print("Image saved at: generated_image.png")  # Log the save path
-
-            # Display the saved image
-            try:
-                import os
-                from PIL import Image
-
-                img = Image.open("generated_image.png")
-                temp_path = "generated_image_temp.png"
-                img.save(temp_path)
-                open_image_devcontainer(temp_path)
-            except Exception as e:
-                print(f"Error displaying the image: {e}")
+    
+    print("=" * 60)
+    print("SDXL Diffusion Model Training Pipeline")
+    print("=" * 60)
+    
+    try:
+        # Resolve data directory path based on OS
+        import platform
+        if platform.system() == "Windows":
+            data_dir = 'C:/Users/presc/AppData/Local/Temp/_tmp_flyers'
+        else:
+            # For Linux/macOS, use the data directory in the project
+            data_dir = os.path.join(os.path.dirname(__file__), '..', 'data', '_tmp_flyers')
         
-            log_pipeline_run(prompt, num_inference_steps, 0)
-        except Exception as e:
-            print(f"Error during image generation: {e}")
+        print(f"Loading data from: {data_dir}")
+        
+        # Create data loaders
+        train_loader, val_loader, test_loader = create_train_loader(
+            data_dir=data_dir,
+            image_size=IMG_SIZE,
+            batch_size=args.batch_size,
+            splits=(0.8, 0.1, 0.1),
+            seed=42,
+            num_workers=0  # Set to 0 to avoid multiprocessing issues
+        )
 
-    input_data = torch.randn((args.batch_size, IMG_CH, IMG_SIZE, IMG_SIZE), device=device)
-    benchmark_metrics(model, input_data, device=str(device))
+        # Initialize the SDXL model
+        print("\nInitializing SDXL model...")
+        model = SDXL(
+            img_channels=IMG_CH,
+            img_size=IMG_SIZE,
+            down_channels=(32, 64, 128, 256),
+            t_embed_dim=128,
+            c_embed_dim=128,
+            num_classes=10
+        ).to(device)
+        
+        print(f"Model initialized. Total parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-    # Data visualization
-    plt.plot(epoch_train_loss, label='Train Loss')
-    plt.show()
-    plt.plot(epoch_val_loss, label='Val Loss')  
-    plt.show()
+        # Initialize optimizer and loss function
+        optimizer = Adam(model.parameters(), lr=0.001)
+        criterion = nn.MSELoss()
+        
+        print(f"Optimizer: Adam (lr=0.001)")
+        print(f"Loss Function: MSELoss")
+
+        # Train the model
+        print("\n" + "=" * 60)
+        print("Starting Training Loop")
+        print("=" * 60)
+        
+        train_model(
+            train_loader, 
+            val_loader, 
+            model, 
+            optimizer, 
+            criterion, 
+            num_epochs, 
+            device, 
+            scaler, 
+            writer, 
+            args
+        )
+
+        print("\n" + "=" * 60)
+        print("Training Complete")
+        print("=" * 60)
+
+        # Close TensorBoard writer
+        if writer:
+            writer.close()
+            print("TensorBoard logs saved.")
+
+        # Image generation phase
+        print("\nBefore generation check:")
+        print(f"  Generation enabled: {args.gen_enabled}")
+        print(f"  Base pipeline available: {base is not None}")
+        
+        if args.gen_enabled and base is not None:
+            print("\n" + "=" * 60)
+            print("Starting Image Generation")
+            print("=" * 60)
+            
+            # Define sample prompts for generation
+            generation_prompts = [
+                "A flyer that matches the brand for a mimosa and mingle event on November 8th from 10 to noon",
+                "A professional business flyer with modern design elements",
+                "A colorful event flyer for a summer party"
+            ]
+            
+            generated_images = generate_images_from_model(
+                base, 
+                refiner, 
+                generation_prompts, 
+                num_inference_steps=50
+            )
+            
+            print(f"\nGenerated {len(generated_images)} images successfully")
+
+        # Benchmark the model
+        print("\n" + "=" * 60)
+        print("Running Model Benchmarks")
+        print("=" * 60)
+        
+        input_data = torch.randn((args.batch_size, IMG_CH, IMG_SIZE, IMG_SIZE), device=device)
+        benchmark_metrics(model, input_data, device=str(device))
+
+        # Visualize training metrics
+        print("\n" + "=" * 60)
+        print("Generating Training Visualizations")
+        print("=" * 60)
+        
+        if epoch_train_loss:
+            plt.figure(figsize=(10, 5))
+            plt.plot(epoch_train_loss, label='Training Loss', marker='o')
+            plt.plot(epoch_val_loss, label='Validation Loss', marker='s')
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.title('Training and Validation Loss Over Epochs')
+            plt.legend()
+            plt.grid(True)
+            plt.savefig('training_loss.png')
+            print("Loss plot saved: training_loss.png")
+            plt.show()
+
+        print("\n" + "=" * 60)
+        print("Pipeline Execution Completed Successfully!")
+        print("=" * 60)
+
+    except Exception as e:
+        print(f"\nError during pipeline execution: {str(e)}")
+        import traceback
+        traceback.print_exc()
