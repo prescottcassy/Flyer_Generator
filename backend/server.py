@@ -17,7 +17,7 @@ app = FastAPI()
 # Allow CORS for your frontend (GitHub Pages domain)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # you can restrict to ["https://prescottcassy.github.io"]
+    allow_origins=["https://prescottcassy.github.io/Flyer_Generator/"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
