@@ -13,16 +13,12 @@ RUN apt-get update && apt-get install -y \
 
 RUN pip install --upgrade pip
 
-# Copy requirements files
-COPY requirements.txt ./
-COPY backend/requirements.txt ./backend/
+# Copy all files and directories
+COPY . .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir -r backend/requirements.txt
-
-# Copy app and start script
-COPY . .
 
 # Make start script executable
 RUN chmod +x start.sh
