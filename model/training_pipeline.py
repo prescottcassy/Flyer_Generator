@@ -1,4 +1,5 @@
 import os
+from huggingface_hub import InferenceClient
 import sys
 import torch
 import torch.nn as nn
@@ -46,12 +47,6 @@ n_steps = 1000
 beta_start = 0.0001
 beta_end = 0.02
 num_epochs = 3
-import argparse
-parser = argparse.ArgumentParser()
-parser.add_argument('--gen-enabled', action='store_true')
-parser.add_argument('--batch-size', type=int, default=1)
-parser.add_argument('--grad-accum-steps', type=int, default=4)
-args = parser.parse_args()
 
 # Enable mixed precision training to reduce memory usage
 scaler = GradScaler(init_scale=2.0)  # Updated to use recommended syntax for 'torch.amp.GradScaler'
@@ -60,8 +55,31 @@ writer = SummaryWriter()
 epoch_train_loss = []
 epoch_val_loss = []
 
+def load_pipeline():
+    """Load and initialize the SDXL diffusion pipeline for inference."""
+    global base, refiner
+    print("Loading SDXL pipeline for inference...")
+    return base, refiner
+
+def get_generator_args(gen_enabled=False, batch_size=1, grad_accum_steps=4):
+    """Create args object for training/generation (used by backend)."""
+    class Args:
+        pass
+    args = Args()
+    args.gen_enabled = gen_enabled
+    args.batch_size = batch_size
+    args.grad_accum_steps = grad_accum_steps
+    return args
+
 if __name__ == '__main__':
     # Wrap the main execution logic inside this guard
+    import argparse
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--gen-enabled', action='store_true')
+    parser.add_argument('--batch-size', type=int, default=1)
+    parser.add_argument('--grad-accum-steps', type=int, default=4)
+    args = parser.parse_args()
 
     # Correct the unpacking of the tuple returned by create_train_loader
     train_loader, val_loader, test_loader = create_train_loader(
@@ -140,7 +158,6 @@ if __name__ == '__main__':
         print(f"gen_enabled: {args.gen_enabled}, base is not None: {base is not None}")
         print("Starting image generation...")
         # Use the trained model in the pipeline
-        # base.unet = model  # Temporarily comment out to use original model
         try:
             prompt = "A flyer that matches the brand for a mimosa and mingle event on November 8th from 10 to noon"
             num_inference_steps = 50
@@ -166,9 +183,3 @@ if __name__ == '__main__':
 
     input_data = torch.randn((args.batch_size, IMG_CH, IMG_SIZE, IMG_SIZE), device=device)
     benchmark_metrics(model, input_data, device=str(device))
-
-    # Data visualization
-    plt.plot(epoch_train_loss, label='Train Loss')
-    plt.show()
-    plt.plot(epoch_val_loss, label='Val Loss')  
-    plt.show()

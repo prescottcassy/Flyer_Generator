@@ -1,13 +1,22 @@
 const API_BASE = "https://zonal-cooperation-production.up.railway.app";
 
 export async function health() {
-  return fetch(`${API_BASE}/health`).then(r => r.json());
+  try {
+    const response = await fetch(`${API_BASE}/health`);
+    if (!response.ok) throw new Error(`Health check failed: ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error("Health check error:", error);
+    throw error;
+  }
 }
 
 export async function generate(prompt, num_steps = 50) {
   const res = await fetch(`${API_BASE}/generate`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ 
       prompt, 
       num_inference_steps: num_steps,
@@ -18,6 +27,7 @@ export async function generate(prompt, num_steps = 50) {
 
   if (!res.ok) {
     const error = await res.text();
+    console.error(`Generation failed (${res.status}):`, error);
     throw new Error(`Generation failed (${res.status}): ${error}`);
   }
 
@@ -32,9 +42,26 @@ export async function generate(prompt, num_steps = 50) {
 }
 
 export async function uploadImage(formData) {
-  return fetch(`${API_BASE}/upload`, { method: 'POST', body: formData }).then(r => r.json());
+  try {
+    const response = await fetch(`${API_BASE}/upload`, { 
+      method: 'POST', 
+      body: formData 
+    });
+    if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error("Upload error:", error);
+    throw error;
+  }
 }
 
 export async function listImages() {
-  return fetch(`${API_BASE}/list`).then(r => r.json());
+  try {
+    const response = await fetch(`${API_BASE}/list`);
+    if (!response.ok) throw new Error(`List failed: ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error("List error:", error);
+    throw error;
+  }
 }
