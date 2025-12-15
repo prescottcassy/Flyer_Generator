@@ -1,80 +1,154 @@
-import logging
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
+"""
+FastAPI Backend for Flyer Generator
+Now uses Modal for GPU inference - lightweight proxy server
+"""
 
-# Configure logging
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from pydantic import BaseModel
+import modal
+import base64
+import logging
+
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# -------------------------------------------------------------------
-# FastAPI setup
-# -------------------------------------------------------------------
-app = FastAPI(title="Flyer Generator API")
+app = FastAPI(
+    title="Flyer Generator API",
+    description="AI-powered flyer generation using SDXL via Modal GPU",
+    version="2.0.0"
+)
 
-# CORS configuration - allow all origins
+# CORS configuration - allow all origins for now (can restrict later)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=False,  # Must be False when using allow_origins=["*"]
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# -------------------------------------------------------------------
-# Request schema
-# -------------------------------------------------------------------
 class GenerateRequest(BaseModel):
     prompt: str
     num_inference_steps: int = 50
-
-# -------------------------------------------------------------------
-# Routes
-# -------------------------------------------------------------------
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "prompt": "A vibrant summer music festival flyer with bold text and colorful background",
+                "num_inference_steps": 50
+            }
+        }
 
 @app.get("/")
-@app.get("/health")
-async def health():
-    """Health check endpoint."""
+def root():
+    """Root endpoint"""
     return {
-        "status": "ok",
-        "service": "Flyer Generator API"
+        "message": "Flyer Generator API",
+        "version": "2.0.0",
+        "gpu_backend": "Modal (Serverless)",
+        "endpoints": {
+            "health": "/health",
+            "generate": "/generate"
+        }
     }
 
-@app.post("/generate")
-async def generate(req: GenerateRequest):
-    """Generate an image from a text prompt."""
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
     try:
-        logger.info(f"Generate request: {req.prompt[:50]}...")
+        # Test Modal connection
+        f = modal.Function.lookup("flyer-generator", "generate_flyer")
+        
         return {
-            "image": "",
-            "prompt": req.prompt,
-            "num_inference_steps": req.num_inference_steps,
-            "status": "placeholder",
-            "message": "Image generation will be implemented here"
+            "status": "healthy",
+            "backend": "Railway",
+            "gpu_provider": "Modal",
+            "model": "Stable Diffusion XL",
+            "modal_connected": True
         }
     except Exception as e:
-        logger.exception(f"Error: {str(e)}")
-        return JSONResponse(
+        logger.error(f"Modal connection failed: {e}")
+        return {
+            "status": "degraded",
+            "backend": "Railway",
+            "gpu_provider": "Modal",
+            "modal_connected": False,
+            "error": str(e)
+        }
+
+@app.post("/generate")
+async def generate_image(request: GenerateRequest):
+    """
+    Generate a flyer image from a text prompt
+    
+    Args:
+        request: GenerateRequest with prompt and optional num_inference_steps
+    
+    Returns:
+        PNG image bytes
+    """
+    logger.info(f"Received generation request: {request.prompt[:50]}...")
+    
+    try:
+        # Validate inputs
+        if not request.prompt or len(request.prompt.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Prompt cannot be empty")
+        
+        if request.num_inference_steps < 1 or request.num_inference_steps > 150:
+            raise HTTPException(
+                status_code=400, 
+                detail="num_inference_steps must be between 1 and 150"
+            )
+        
+        # Lookup Modal function
+        logger.info("Looking up Modal GPU function...")
+        f = modal.Function.lookup("flyer-generator", "generate_flyer")
+        
+        # Call Modal GPU function (this is where the magic happens!)
+        logger.info("Calling Modal GPU for image generation...")
+        img_base64 = f.remote(request.prompt, request.num_inference_steps)
+        
+        # Decode base64 to bytes
+        logger.info("Decoding image and sending response...")
+        img_bytes = base64.b64decode(img_base64)
+        
+        return Response(
+            content=img_bytes,
+            media_type="image/png",
+            headers={
+                "Content-Disposition": "inline; filename=generated_flyer.png"
+            }
+        )
+        
+    except modal.exception.NotFoundError:
+        logger.error("Modal function not found - did you deploy modal_gpu.py?")
+        raise HTTPException(
+            status_code=503,
+            detail="GPU service not available. Please deploy Modal function first."
+        )
+    
+    except Exception as e:
+        logger.error(f"Generation failed: {str(e)}")
+        raise HTTPException(
             status_code=500,
-            content={"detail": f"Error: {str(e)}"}
+            detail=f"Image generation failed: {str(e)}"
         )
 
-# -------------------------------------------------------------------
-# Startup/Shutdown
-# -------------------------------------------------------------------
-@app.on_event("startup")
-async def startup_event():
-    """Initialize on startup."""
-    logger.info("=" * 60)
-    logger.info("Flyer Generator API starting...")
-    logger.info("=" * 60)
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown."""
-    logger.info("Flyer Generator API shutting down...")
+@app.get("/info")
+def get_info():
+    """Get information about the service"""
+    return {
+        "model": "Stable Diffusion XL",
+        "version": "1.0",
+        "gpu": "NVIDIA A10G (via Modal)",
+        "max_inference_steps": 150,
+        "default_inference_steps": 50,
+        "image_size": "1024x1024",
+        "average_generation_time": "2-4 seconds"
+    }
 
 if __name__ == "__main__":
     import uvicorn
