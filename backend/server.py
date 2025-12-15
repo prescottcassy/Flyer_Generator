@@ -21,13 +21,16 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# CORS configuration - allow all origins for now (can restrict later)
+origins = [
+    "https://prescottcassy.github.io"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
-    allow_credentials=False,  # Must be False when using allow_origins=["*"]
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
+    allow_origins=origins,        # or ["*"] for all origins (not recommended for production)
+    allow_credentials=True,
+    allow_methods=["*"],          # GET, POST, OPTIONS, etc.
+    allow_headers=["*"],          # Accept all headers
 )
 
 class GenerateRequest(BaseModel):
@@ -60,7 +63,7 @@ def health_check():
     """Health check endpoint"""
     try:
         # Test Modal connection
-        f = modal.Function.lookup("flyer-generator", "generate_flyer")
+        f = modal.Function.from_name("flyer-generator", "generate_flyer")
         
         return {
             "status": "healthy",
@@ -105,7 +108,7 @@ async def generate_image(request: GenerateRequest):
         
         # Lookup Modal function
         logger.info("Looking up Modal GPU function...")
-        f = modal.Function.lookup("flyer-generator", "generate_flyer")
+        f = modal.Function.from_name("flyer-generator", "generate_flyer")
         
         # Call Modal GPU function (this is where the magic happens!)
         logger.info("Calling Modal GPU for image generation...")

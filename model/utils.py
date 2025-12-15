@@ -16,6 +16,7 @@ from PIL import Image
 import csv
 import numpy as np
 
+
 # Helper functions
 def validate_model_parameters(model):
     """Count and print the number of trainable parameters in the model."""

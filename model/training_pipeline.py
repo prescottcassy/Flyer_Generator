@@ -28,7 +28,8 @@ from .utils import (
     open_image_devcontainer,
     benchmark_metrics,
     log_pipeline_run,
-    create_train_loader
+    create_train_loader,
+    generate_image
 )
 
 from .diffusion_process import (
@@ -55,20 +56,26 @@ writer = SummaryWriter()
 epoch_train_loss = []
 epoch_val_loss = []
 
+# Initialize base and refiner at module level
+base = None
+refiner = None
+
 def load_pipeline():
     """Load and initialize the SDXL diffusion pipeline for inference."""
     global base, refiner
     print("Loading SDXL pipeline for inference...")
+    base = None
+    refiner = None
     return base, refiner
 
 def get_generator_args(gen_enabled=False, batch_size=1, grad_accum_steps=4):
     """Create args object for training/generation (used by backend)."""
     class Args:
-        pass
-    args = Args()
-    args.gen_enabled = gen_enabled
-    args.batch_size = batch_size
-    args.grad_accum_steps = grad_accum_steps
+        def __init__(self, gen_enabled=False, batch_size=1, grad_accum_steps=4):
+            self.gen_enabled = gen_enabled
+            self.batch_size = batch_size
+            self.grad_accum_steps = grad_accum_steps
+    args = Args(gen_enabled, batch_size, grad_accum_steps)
     return args
 
 if __name__ == '__main__':
@@ -161,7 +168,7 @@ if __name__ == '__main__':
         try:
             prompt = "A flyer that matches the brand for a mimosa and mingle event on November 8th from 10 to noon"
             num_inference_steps = 50
-            generated_image = generate_image(base, prompt, num_inference_steps=num_inference_steps)
+            generated_image = generate_image(prompt, num_inference_steps)
             save_image(generated_image, "generated_image.png")
             print("Image saved at: generated_image.png")  # Log the save path
 
