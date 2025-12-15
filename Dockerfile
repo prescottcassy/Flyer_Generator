@@ -21,8 +21,11 @@ COPY backend/requirements.txt ./backend/
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip install --no-cache-dir -r backend/requirements.txt
 
-# Copy app
+# Copy app and start script
 COPY . .
+
+# Make start script executable
+RUN chmod +x start.sh
 
 # Expose port (Railway will set $PORT)
 EXPOSE 8000
@@ -31,5 +34,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# Run the app (use shell form to expand $PORT variable)
-CMD uvicorn backend.server:app --host 0.0.0.0 --port ${PORT:-8000}
+# Run using the start script
+CMD ["./start.sh"]
