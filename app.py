@@ -6,9 +6,10 @@ import gradio as gr
 from gradio.themes import Soft
 import spaces
 from model.model import SDXLModel
-from model.utils import save_image, create_output_dir
+from model.utils import create_output_dir
 from datetime import datetime
 import os
+from PIL import Image
 
 
 # Global model instance (loaded on-demand)
@@ -50,7 +51,7 @@ def generate_flyer(
     
     # Generate image
     try:
-        images = sdxl_model.generate(
+        image = sdxl_model.generate(
             prompt=prompt,
             negative_prompt=negative_prompt,
             num_inference_steps=num_steps,
@@ -62,14 +63,30 @@ def generate_flyer(
         )
         
         # Save the generated image
-        output_dir = create_output_dir("outputs")
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = output_dir / f"flyer_{timestamp}.png"
-        save_image(images[0], output_path)
-        
+        if image is not None:
+            output_dir = create_output_dir("outputs")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = output_dir / f"flyer_{timestamp}.png"
+            if isinstance(image, Image.Image):
+                image.save(output_path)
+            elif isinstance(image, list) and len(image) > 0:
+                if isinstance(image[0], Image.Image):
+                    image[0].save(output_path)
+            else:
+                # Convert numpy array or tensor to PIL Image
+                import numpy as np
+                import torch
+                if isinstance(image, torch.Tensor):
+                    image = image.cpu()
+                    if hasattr(image, 'numpy'):
+                        image = image.numpy()
+                if isinstance(image, np.ndarray):
+                    image = Image.fromarray((image * 255).astype(np.uint8)) if image.max() <= 1 else Image.fromarray(image.astype(np.uint8))
+                    image.save(output_path)
+                
         info = f"✅ Generated successfully!\nSeed: {actual_seed if actual_seed else 'random'}\nSteps: {num_steps}"
         
-        return images, info
+        return image, info
         
     except Exception as e:
         return None, f"❌ Error: {str(e)}"
@@ -79,11 +96,11 @@ def generate_flyer(
 def create_interface():
     """Create the Gradio interface."""
     
-    with gr.Blocks(title="Flyer Generator - SDXL", theme=Soft()) as demo:
+    with gr.Blocks(title="Image Generator", theme=Soft()) as demo:
         gr.Markdown(
             """
-            # 🎨 Flyer Generator with SDXL
-            Generate professional flyers using Stable Diffusion XL.
+            # 🎨 Image Generator
+            Generate professional images using Stable Diffusion XL.
             Powered by Gradio Zero GPU for fast, serverless inference.
             """
         )
@@ -92,14 +109,8 @@ def create_interface():
             with gr.Column(scale=1):
                 prompt = gr.Textbox(
                     label="Prompt",
-                    placeholder="Describe your flyer: 'A professional business flyer for a coffee shop...'",
+                    placeholder="Describe your image: 'A professional business flyer for a coffee shop...'",
                     lines=3
-                )
-                
-                negative_prompt = gr.Textbox(
-                    label="Negative Prompt",
-                    value="blurry, bad quality, distorted, ugly, text errors, watermark",
-                    lines=2
                 )
                 
                 with gr.Row():
@@ -145,63 +156,19 @@ def create_interface():
                     value=True
                 )
                 
-                generate_btn = gr.Button("🚀 Generate Flyer", variant="primary", size="lg")
+                generate_btn = gr.Button("🚀 Generate Image", variant="primary", size="lg")
             
             with gr.Column(scale=1):
                 output_image = gr.Image(
-                    label="Generated Flyer",
+                    label="Generated Image",
                     type="pil"
                 )
-                output_info = gr.Textbox(
-                    label="Generation Info",
-                    lines=3
-                )
-        
-        # Examples
-        gr.Examples(
-            examples=[
-                [
-                    "Professional coffee shop flyer, modern design, warm colors, coffee beans, minimalist, clean layout",
-                    "blurry, bad quality, distorted, ugly",
-                    50,
-                    7.5,
-                    1024,
-                    1024,
-                    42,
-                    True
-                ],
-                [
-                    "Tech conference flyer, futuristic design, blue and purple gradient, circuit patterns, 'TECH 2025' text, professional",
-                    "blurry, bad quality, text errors",
-                    50,
-                    7.5,
-                    1024,
-                    1024,
-                    123,
-                    True
-                ],
-                [
-                    "Summer music festival poster, vibrant colors, tropical theme, palm trees, sunset, energetic design",
-                    "blurry, bad quality, distorted",
-                    50,
-                    7.5,
-                    1024,
-                    1024,
-                    456,
-                    True
-                ]
-            ],
-            inputs=[prompt, negative_prompt, num_steps, guidance_scale, width, height, seed, use_refiner],
-            outputs=[output_image, output_info],
-            fn=generate_flyer,
-            cache_examples=False
-        )
         
         # Connect the generate button
         generate_btn.click(
             fn=generate_flyer,
-            inputs=[prompt, negative_prompt, num_steps, guidance_scale, width, height, seed, use_refiner],
-            outputs=[output_image, output_info]
+            inputs=[prompt, num_steps, guidance_scale, width, height, seed, use_refiner],
+            outputs=[output_image]
         )
     
     return demo
