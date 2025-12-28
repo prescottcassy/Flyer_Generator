@@ -47,7 +47,9 @@ The **AI Flyer Generator** is a full-stack web application that leverages genera
 
 - **Model**: Stable Diffusion XL (1.0) from Hugging Face
 - **Inference**: Text prompts → Latent diffusion → PNG images
-- **Optimization**: Lazy loading (models load on first request, not startup)
+- **Optimization**: Model CPU offloading, VAE slicing, VAE tiling
+- **Refiner Support**: Optional SDXL refiner for enhanced quality
+- **Gradio Integration**: Web UI with Gradio Zero GPU support
 - **Hardware**: CPU-optimized inference with fallback error handling
 
 ### 2. **REST API Endpoints**

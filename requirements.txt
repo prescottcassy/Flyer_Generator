@@ -10,7 +10,12 @@ diffusers
 transformers
 torch
 torchvision
-tensorboard
+safetensors
+omegaconf
+
+# Gradio and Spaces
+gradio
+spaces
 
 # API
 fastapi
