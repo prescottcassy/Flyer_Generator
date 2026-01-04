@@ -2,7 +2,6 @@
 python-dotenv
 numpy
 Pillow
-matplotlib
 accelerate
 
 # ML packages
@@ -23,5 +22,4 @@ uvicorn
 python-multipart
 httpx
 pydantic
-
 modal
