@@ -3,12 +3,11 @@ Gradio App for Flyer Generation with SDXL
 Uses Gradio Zero GPU for serverless GPU compute
 """
 import gradio as gr
-from gradio.themes import Soft
+from gradio.themes import Glass
 import spaces
 from model.model import SDXLModel
 from model.utils import create_output_dir
 from datetime import datetime
-import os
 from PIL import Image
 
 
@@ -96,10 +95,10 @@ def generate_flyer(
 def create_interface():
     """Create the Gradio interface."""
     
-    with gr.Blocks(title="Image Generator", theme=Soft()) as demo:
+    with gr.Blocks(title="Image Generator", theme=Glass()) as demo:
         gr.Markdown(
             """
-            # 🎨 Image Generator
+            # Image Generator
             Generate professional images using Stable Diffusion XL.
             Powered by Gradio Zero GPU for fast, serverless inference.
             """
